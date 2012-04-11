@@ -1,3 +1,4 @@
+
 # Copyright (C) 2012 The CyanogenMod Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,12 +60,20 @@ TARGET_AUTO_KDIR := $(shell echo $(TARGET_DEVICE_DIR) | sed -e 's/^device/kernel
 KERNEL_TOOLS := \
   $(HOST_OUT_EXECUTABLES)/mkimage
 
+#Android makefile to build kernel as a part of Android Build
+
+TARGET_AUTO_KDIR := $(shell echo $(TARGET_DEVICE_DIR) | sed -e 's/^device/kernel/g')
+
 ## Externally influenced variables
 # kernel location - optional, defaults to kernel/<vendor>/<device>
 TARGET_KERNEL_SOURCE ?= $(TARGET_AUTO_KDIR)
 KERNEL_SRC := $(TARGET_KERNEL_SOURCE)
+
+
 # kernel configuration
 TARGET_KERNEL_CONFIG ?= $(TARGET_DEVICE)_defconfig
+
+# kernel configuration - mandatory
 KERNEL_DEFCONFIG := $(TARGET_KERNEL_CONFIG)
 VARIANT_DEFCONFIG := $(TARGET_KERNEL_VARIANT_CONFIG)
 SELINUX_DEFCONFIG := $(TARGET_KERNEL_SELINUX_CONFIG)
@@ -183,9 +192,24 @@ ifeq "$(wildcard $(KERNEL_SRC) )" ""
         $(warning * See http://wiki.cyanogenmod.org/w/Doc:_integrated_kernel_building)
         $(warning * for more information                                        *)
         $(warning ***************************************************************)
+
 # allow forcing prebuilt
 ifneq ($(filter false 0,$(strip $(BUILD_KERNEL))),)
     KERNEL_SRC:=
+
+# kernel configuration - mandatory
+KERNEL_DEFCONFIG := $(TARGET_KERNEL_CONFIG)
+
+## Internal variables
+KERNEL_OUT := $(ANDROID_BUILD_TOP)/$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
+KERNEL_CONFIG := $(KERNEL_OUT)/.config
+
+ifeq ($(BOARD_USES_UBOOT),true)
+	TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/$(TARGET_ARCH)/boot/uImage
+	TARGET_PREBUILT_INT_KERNEL_TYPE := uImage
+else
+	TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/$(TARGET_ARCH)/boot/zImage
+	TARGET_PREBUILT_INT_KERNEL_TYPE := zImage
 endif
 
 ifeq "$(wildcard $(KERNEL_SRC) )" ""
@@ -194,7 +218,10 @@ ifeq "$(wildcard $(KERNEL_SRC) )" ""
         $(warning *         Using prebuilt kernel binary         *)
         $(warning *              This is depreciated             *)
         $(warning *       Your build will most likely fail!      *)
+
+
         $(warning ************************************************)
+
         FULL_KERNEL_BUILD := false
         KERNEL_BIN := $(TARGET_PREBUILT_KERNEL)
     else
@@ -225,6 +252,31 @@ else
         #$(info Kernel source found, building it)
         FULL_KERNEL_BUILD := true
         KERNEL_BIN := $(TARGET_PREBUILT_INT_KERNEL)
+
+        $(warning *************************************************)
+        $(warning *        ERROR: Can't find kernel source        *)
+        $(warning *                                               *)
+        $(warning * If using a prebuilt kernel you must define    *)
+        $(warning * TARGET_PREBUILT_KERNEL in the BoardConfig.mk  *)
+        $(warning *************************************************)
+        $(error "NO KERNEL")
+    endif
+else
+    ifeq ($(TARGET_KERNEL_CONFIG),)
+        $(warning *************************************************)
+        $(warning *     ERROR: no kernel configuration found      *)
+        $(warning *              You need to define               *)
+        $(warning *   TARGET_KERNEL_CONFIG in the BoardConfig.mk  *)
+        $(warning *************************************************)
+        $(error "NO KERNEL CONFIG")
+    else
+        FULL_KERNEL_BUILD := true
+        ifeq ($(TARGET_USES_UNCOMPRESSED_KERNEL),true)
+        $(info Using uncompressed kernel)
+            KERNEL_BIN := $(KERNEL_OUT)/piggy
+        else
+            KERNEL_BIN := $(TARGET_PREBUILT_INT_KERNEL)
+        endif
     endif
 endif
 
@@ -273,14 +325,21 @@ endif
 
 KERNEL_CROSS_COMPILE := CROSS_COMPILE="$(ccache) $(KERNEL_TOOLCHAIN_PATH)"
 ccache =
+KERNEL_MODULES_INSTALL := system
+KERNEL_MODULES_OUT := $(TARGET_OUT)/lib/modules
+
 
 define mv-modules
     mdpath=`find $(KERNEL_MODULES_OUT) -type f -name modules.order`;\
     if [ "$$mdpath" != "" ];then\
         mpath=`dirname $$mdpath`;\
         ko=`find $$mpath/kernel -type f -name *.ko`;\
+
         for i in $$ko; do $(KERNEL_TOOLCHAIN_PATH)strip --strip-unneeded $$i;\
         mv $$i $(KERNEL_MODULES_OUT)/; done;\
+
+        for i in $$ko; do mv $$i $(KERNEL_MODULES_OUT)/; done;\
+
     fi
 endef
 
@@ -291,12 +350,18 @@ define clean-module-folder
     fi
 endef
 
+
 ifeq ($(HOST_OS),darwin)
   MAKE_FLAGS += C_INCLUDE_PATH=$(ANDROID_BUILD_TOP)/external/elfutils/libelf/
+
+ifeq ($(TARGET_ARCH),arm)
+    ARM_CROSS_COMPILE:=CROSS_COMPILE=$(ARM_EABI_TOOLCHAIN)/arm-eabi-
+
 endif
 
 ifeq ($(TARGET_KERNEL_MODULES),)
     TARGET_KERNEL_MODULES := no-external-modules
+
 ifeq ($(TARGET_ARCH),arm)
     ifneq ($(USE_CCACHE),)
       ccache := $(ANDROID_BUILD_TOP)/prebuilt/$(HOST_PREBUILT_TAG)/ccache/ccache
@@ -313,9 +378,14 @@ $(KERNEL_OUT_STAMP):
 	$(hide) rm -rf $(KERNEL_MODULES_OUT)
 	$(hide) mkdir -p $(KERNEL_MODULES_OUT)
 	$(hide) touch $@
+
+endif
+
+
 $(KERNEL_OUT):
 	mkdir -p $(KERNEL_OUT)
 	mkdir -p $(KERNEL_MODULES_OUT)
+
 
 KERNEL_ADDITIONAL_CONFIG_OUT := $(KERNEL_OUT)/.additional_config
 $(KERNEL_CONFIG): $(KERNEL_OUT)
@@ -382,9 +452,26 @@ TARGET_KERNEL_INTREE_MODULES: TARGET_KERNEL_BINARIES
 
 $(TARGET_KERNEL_MODULES): TARGET_KERNEL_INTREE_MODULES
 
+$(KERNEL_CONFIG): $(KERNEL_OUT)
+	$(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(TARGET_ARCH) $(ARM_CROSS_COMPILE) $(KERNEL_DEFCONFIG)
+
+$(KERNEL_OUT)/piggy : $(TARGET_PREBUILT_INT_KERNEL)
+	$(hide) gunzip -c $(KERNEL_OUT)/arch/$(TARGET_ARCH)/boot/compressed/piggy.gzip > $(KERNEL_OUT)/piggy
+
+TARGET_KERNEL_BINARIES: $(KERNEL_OUT) $(KERNEL_CONFIG) $(KERNEL_HEADERS_INSTALL)
+	$(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(TARGET_ARCH) $(ARM_CROSS_COMPILE) $(TARGET_PREBUILT_INT_KERNEL_TYPE)
+	$(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(TARGET_ARCH) $(ARM_CROSS_COMPILE) modules
+	$(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) INSTALL_MOD_PATH=../../$(KERNEL_MODULES_INSTALL) ARCH=$(TARGET_ARCH) $(ARM_CROSS_COMPILE) modules_install
+	$(mv-modules)
+	$(clean-module-folder)
+
+$(TARGET_KERNEL_MODULES): TARGET_KERNEL_BINARIES
+
+
 $(TARGET_PREBUILT_INT_KERNEL): $(TARGET_KERNEL_MODULES)
 	$(mv-modules)
 	$(clean-module-folder)
+
 
 $(KERNEL_HEADERS_INSTALL_STAMP): $(KERNEL_OUT_STAMP) $(KERNEL_CONFIG)
 	@echo -e ${CL_GRN}"Building Kernel Headers"${CL_RST}
@@ -436,18 +523,27 @@ $(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT) $(KERNEL_CONFIG)
 	$(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(TARGET_ARCH) $(ARM_CROSS_COMPILE) headers_install
 
 
+
+$(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT) $(KERNEL_CONFIG)
+	$(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(TARGET_ARCH) $(ARM_CROSS_COMPILE) headers_install
+
+
 endif # FULL_KERNEL_BUILD
 
 ## Install it
 
+
 ifeq ($(NEEDS_KERNEL_COPY),true)
+
 file := $(INSTALLED_KERNEL_TARGET)
 ALL_PREBUILT += $(file)
 $(file) : $(KERNEL_BIN) | $(ACP)
 	$(transform-prebuilt-to-target)
 
 ALL_PREBUILT += $(INSTALLED_KERNEL_TARGET)
+
 endif
 
 .PHONY: kernel
 kernel: $(INSTALLED_KERNEL_TARGET)
+
