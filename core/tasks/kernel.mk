@@ -178,7 +178,6 @@ ifeq "$(wildcard $(KERNEL_SRC) )" ""
         $(warning *              This is depreciated             *)
         $(warning *       Your build will most likely fail!      *)
         $(warning ************************************************)
->>>>>>> 3f939d8... kernel: start building by default
         FULL_KERNEL_BUILD := false
         KERNEL_BIN := $(TARGET_PREBUILT_KERNEL)
     else
@@ -290,6 +289,8 @@ $(KERNEL_OUT_STAMP):
 	$(hide) touch $@
 
 KERNEL_ADDITIONAL_CONFIG_OUT := $(KERNEL_OUT)/.additional_config
+$(KERNEL_CONFIG): $(KERNEL_OUT)
+	$(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(TARGET_ARCH) $(ARM_CROSS_COMPILE) $(ARM_KCFLAGS) VARIANT_DEFCONFIG=$(VARIANT_DEFCONFIG) SELINUX_DEFCONFIG=$(SELINUX_DEFCONFIG) $(KERNEL_DEFCONFIG)
 
 .PHONY: force_additional_config
 $(KERNEL_ADDITIONAL_CONFIG_OUT): force_additional_config
