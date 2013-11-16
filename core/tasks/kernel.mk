@@ -59,7 +59,8 @@ TARGET_AUTO_KDIR := $(shell echo $(TARGET_DEVICE_DIR) | sed -e 's/^device/kernel
 # kernel location - optional, defaults to kernel/<vendor>/<device>
 TARGET_KERNEL_SOURCE ?= $(TARGET_AUTO_KDIR)
 KERNEL_SRC := $(TARGET_KERNEL_SOURCE)
-# kernel configuration - mandatory
+# kernel configuration
+TARGET_KERNEL_CONFIG ?= $(TARGET_DEVICE)_defconfig
 KERNEL_DEFCONFIG := $(TARGET_KERNEL_CONFIG)
 VARIANT_DEFCONFIG := $(TARGET_KERNEL_VARIANT_CONFIG)
 SELINUX_DEFCONFIG := $(TARGET_KERNEL_SELINUX_CONFIG)
@@ -165,6 +166,19 @@ ifeq "$(wildcard $(KERNEL_SRC) )" ""
         $(warning * See http://wiki.cyanogenmod.org/w/Doc:_integrated_kernel_building)
         $(warning * for more information                                        *)
         $(warning ***************************************************************)
+# allow forcing prebuilt
+ifneq ($(filter false 0,$(strip $(BUILD_KERNEL))),)
+    KERNEL_SRC:=
+endif
+
+ifeq "$(wildcard $(KERNEL_SRC) )" ""
+    ifneq ($(TARGET_PREBUILT_KERNEL),)
+        $(warning ************************************************)
+        $(warning *         Using prebuilt kernel binary         *)
+        $(warning *              This is depreciated             *)
+        $(warning *       Your build will most likely fail!      *)
+        $(warning ************************************************)
+>>>>>>> 3f939d8... kernel: start building by default
         FULL_KERNEL_BUILD := false
         KERNEL_BIN := $(TARGET_PREBUILT_KERNEL)
     else
