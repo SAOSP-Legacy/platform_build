@@ -70,6 +70,7 @@ KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
 KERNEL_CONFIG := $(KERNEL_OUT)/.config
 KERNEL_OUT_STAMP := $(KERNEL_OUT)/.mkdir_stamp
 
+
 TARGET_KERNEL_ARCH := $(strip $(TARGET_KERNEL_ARCH))
 ifeq ($(TARGET_KERNEL_ARCH),)
 KERNEL_ARCH := $(TARGET_ARCH)
@@ -81,6 +82,18 @@ ifeq ($(KERNEL_ARCH),x86_64)
 KERNEL_DEFCONFIG_ARCH := x86
 else
 KERNEL_DEFCONFIG_ARCH := $(KERNEL_ARCH)
+# You can set KERNEL_TOOLCHAIN_PREFIX to get gcc from somewhere else
+ifeq ($(strip $(KERNEL_TOOLCHAIN_PREFIX)),)
+KERNEL_TOOLCHAIN_ROOT:=$(ANDROID_BUILD_TOP)/prebuilts/gcc/$(HOST_PREBUILT_TAG)/arm/arm-eabi-$(TARGET_GCC_VERSION)
+KERNEL_TOOLCHAIN_PREFIX:=$(KERNEL_TOOLCHAIN_ROOT)/bin/arm-eabi-
+endif
+
+
+# Allow building kernel with different -mtune/cpu options
+ifneq "" "$(strip $(TARGET_EXTRA_CFLAGS))"
+  ifeq "" "$(strip $(KERNEL_CFLAGS))"
+    KERNEL_CFLAGS := $(TARGET_EXTRA_CFLAGS)
+  endif
 endif
 KERNEL_DEFCONFIG_SRC := $(KERNEL_SRC)/arch/$(KERNEL_DEFCONFIG_ARCH)/configs/$(KERNEL_DEFCONFIG)
 
@@ -278,8 +291,20 @@ ifeq ($(HOST_OS),darwin)
   MAKE_FLAGS += C_INCLUDE_PATH=$(ANDROID_BUILD_TOP)/external/elfutils/libelf/
 endif
 
+<<<<<<< HEAD
 ifeq ($(TARGET_KERNEL_MODULES),)
     TARGET_KERNEL_MODULES := no-external-modules
+=======
+ifeq ($(TARGET_ARCH),arm)
+    ifneq ($(USE_CCACHE),)
+      ccache := $(ANDROID_BUILD_TOP)/prebuilt/$(HOST_PREBUILT_TAG)/ccache/ccache
+      # Check that the executable is here.
+      ccache := $(strip $(wildcard $(ccache)))
+    endif
+    ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(KERNEL_TOOLCHAIN_PREFIX)"
+    ccache = 
+    ARM_KCFLAGS:=KCFLAGS="$(KERNEL_CFLAGS)"
+>>>>>>> c3983e0... build:  add in KERNEL_TOOLCHAIN_PREFIX
 endif
 
 $(KERNEL_OUT_STAMP):
