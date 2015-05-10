@@ -291,10 +291,8 @@ ifeq ($(HOST_OS),darwin)
   MAKE_FLAGS += C_INCLUDE_PATH=$(ANDROID_BUILD_TOP)/external/elfutils/libelf/
 endif
 
-<<<<<<< HEAD
 ifeq ($(TARGET_KERNEL_MODULES),)
     TARGET_KERNEL_MODULES := no-external-modules
-=======
 ifeq ($(TARGET_ARCH),arm)
     ifneq ($(USE_CCACHE),)
       ccache := $(ANDROID_BUILD_TOP)/prebuilt/$(HOST_PREBUILT_TAG)/ccache/ccache
@@ -304,7 +302,6 @@ ifeq ($(TARGET_ARCH),arm)
     ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(KERNEL_TOOLCHAIN_PREFIX)"
     ccache = 
     ARM_KCFLAGS:=KCFLAGS="$(KERNEL_CFLAGS)"
->>>>>>> c3983e0... build:  add in KERNEL_TOOLCHAIN_PREFIX
 endif
 
 $(KERNEL_OUT_STAMP):
@@ -395,11 +392,15 @@ kernelxconfig kernelconfig: $(KERNEL_OUT_STAMP)
 		 $(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) $(KERNELCONFIG_MODE)
 	env KCONFIG_NOTIMESTAMP=true \
 		 $(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) savedefconfig
+<<<<<<< HEAD
 	cp $(KERNEL_OUT)/defconfig $(KERNEL_DEFCONFIG_SRC)
 
 alldefconfig: $(KERNEL_OUT_STAMP)
 	env KCONFIG_NOTIMESTAMP=true \
 		 $(MAKE) -C $(KERNEL_SRC) O=$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) alldefconfig
+=======
+	cp $(KERNEL_OUT)/defconfig $(KERNEL_SRC)/arch/$(KERNEL_ARCH)/configs/$(KERNEL_DEFCONFIG)
+>>>>>>> 82cdd66... kernel: Fix kernelconfig build
 
 endif # FULL_KERNEL_BUILD
 
